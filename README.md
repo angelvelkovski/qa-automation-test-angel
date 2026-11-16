@@ -62,7 +62,7 @@ src/config/env.ts the only place that reads process.env
 
 1. **Layers:** specs contain no selectors and no URLs. Pages and components own locators (`data-test` attributes via `getByTestId`); typed API clients own URLs and requests; fixtures wire both into tests.
 2. **Auth once:** a `setup` project logs in per user and saves `storageState`; UI projects depend on it, so tests start logged in and stay independent and parallel-safe.
-3. **Config:** base URLs, credentials and tax rate come from `.env` through one typed `env` module. Nothing is hardcoded in code or `playwright.config.ts`.
+3. **Config and secrets:** base URLs, credentials and tax rate come from environment variables through one typed `env` module (`.env` locally, pipeline secrets/variables in CI; see *Security and secrets*). Nothing is hardcoded in code or `playwright.config.ts`.
 4. **Expected values are computed**, not hardcoded: item prices are read from the page, then item total, tax and total are calculated in integer cents (`utils/money`) and compared with the overview.
 5. **problem_user (known defect):** the same test runs for both users. For problem_user it is marked `test.fail` with a description. It stays visible in the report as an expected failure instead of being skipped or deleted, and turns red the day the defect is fixed, so the marker gets removed. (Its checkout form drops the last name, so it never reaches the overview.)
 6. **Non-persisting POST:** jsonplaceholder acknowledges a POST (201 and an id) but stores nothing, so the follow-up GET returns 404. The tests assert the create contract, and the read-back asserts 404 by default, switchable via `API_PERSISTS_DATA=true` for a real backend. The test documents the behaviour instead of pretending persistence exists.
@@ -78,6 +78,36 @@ src/config/env.ts the only place that reads process.env
 - Rounding: tax is rounded to the nearest cent, as the site displays it.
 - Tests run on Chromium only.
 - jsonplaceholder returns 201 for POST and 404 for a post that was never really stored.
+
+## Security and secrets
+
+**What is in this repo:** only saucedemo's *public demo* accounts (`standard_user` / `problem_user`, published on the saucedemo login page) and public API URLs. They are not real secrets, but the repo is built as if they were:
+
+- **Nothing sensitive in code or config.** `playwright.config.ts` and the sources contain no credentials or URLs. Everything is read from environment variables in one place (`src/config/env.ts`). A missing variable stops the run with a clear error, so there are no silent hardcoded fallbacks.
+- **`.env` is git-ignored**, together with `.auth/` (saved login sessions, which are as sensitive as a password) and the test reports. Only `.env.example` is committed, and it holds demo values and placeholders, never real ones.
+- **Reports can leak data.** Traces and screenshots are only kept on failure, and the report folders are not committed. For a system with real data, publish reports only to access-controlled storage.
+
+**In a CI/CD pipeline, values come from the pipeline, not from files.** Nothing is committed; the pipeline injects the same variable names the code already reads:
+
+| Kind | Examples | Where it lives (GitHub Actions) |
+| --- | --- | --- |
+| **Secrets** (sensitive, masked in logs) | `STANDARD_USER`, `STANDARD_PASSWORD`, `PROBLEM_USER`, `PROBLEM_PASSWORD`, any API token | Repository/Environment **Secrets** (Settings, Secrets and variables, Actions) |
+| **Variables** (not sensitive, can differ per environment) | `UI_BASE_URL`, `API_BASE_URL`, `TAX_RATE`, `API_PERSISTS_DATA` | Repository/Environment **Variables** |
+
+```yaml
+- run: npm test
+  env:
+    UI_BASE_URL: ${{ vars.UI_BASE_URL }}
+    API_BASE_URL: ${{ vars.API_BASE_URL }}
+    TAX_RATE: ${{ vars.TAX_RATE }}
+    API_PERSISTS_DATA: ${{ vars.API_PERSISTS_DATA }}
+    STANDARD_USER: ${{ secrets.STANDARD_USER }}
+    STANDARD_PASSWORD: ${{ secrets.STANDARD_PASSWORD }}
+    PROBLEM_USER: ${{ secrets.PROBLEM_USER }}
+    PROBLEM_PASSWORD: ${{ secrets.PROBLEM_PASSWORD }}
+```
+
+Pipeline practices that go with it: use separate **Environments** (e.g. staging, production) with their own secrets and required reviewers; give the workflow the least permissions it needs (`permissions: contents: read`); never print secrets or upload `.env` / `.auth/` as artifacts; do not expose secrets to pull requests from forks; rotate credentials on a schedule and immediately if one leaks; and add secret scanning (GitHub secret scanning or gitleaks) so a committed secret is caught early.
 
 ## Parts 2 and 3
 
