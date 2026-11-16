@@ -4,7 +4,7 @@ UI tests for https://www.saucedemo.com and API tests for https://jsonplaceholder
 
 ## Setup
 
-Requirements: Node 20+ (and Java 11+ only if you want the Allure report).
+Requirements: Node 22.5+ (the SQL check uses Node's built-in SQLite), and Java 11+ only if you want the Allure report.
 
 ```bash
 npm install
@@ -27,6 +27,9 @@ npx playwright install chromium
 | See the browser | `npx playwright test --headed --workers=1` |
 | Slow motion | `SLOWMO=800 npx playwright test --headed --workers=1 --project=ui-standard` |
 | Debug / UI mode | `npx playwright test --ui` |
+| Postman collection (Part 2) | `npm run test:postman` |
+| SQL queries check (Part 3) | `npm run test:sql` |
+| Everything (typecheck, Playwright, Postman, SQL) | `npm run test:all` |
 | Type check | `npm run typecheck` |
 
 Running a UI project automatically runs the `setup` project first (it logs in and saves the session).
@@ -49,6 +52,8 @@ src/components/   reusable pieces (header, line items, order summary)
 src/api/          typed clients (BaseApiClient, Users, Posts) + schemas/
 src/fixtures/     wires pages and clients into tests
 src/test-data/    users, products, data builders, known defects
+postman/           Postman collection + environment (Part 2)
+sql/              queries.sql, sample data and local check (Part 3)
 src/utils/        money math, schema validation, auth paths, report metadata
 src/config/env.ts the only place that reads process.env
 ```
@@ -74,6 +79,7 @@ src/config/env.ts the only place that reads process.env
 - Tests run on Chromium only.
 - jsonplaceholder returns 201 for POST and 404 for a post that was never really stored.
 
-## Not finished
+## Parts 2 and 3
 
-- **Part 2 (Postman collection) and Part 3 (SQL queries)** are not done yet: `/postman` and `/sql/queries.sql` are still to be added.
+- **Postman** (`/postman`): collection plus environment, with shared tests at collection level. See [postman/README.md](postman/README.md). Run: `npm run test:postman`.
+- **SQL** (`/sql/queries.sql`): the two queries, with an explanation and a local logic check. See [sql/README.md](sql/README.md). Run: `npm run test:sql`. Paste the queries into the W3Schools playground for the real data.
