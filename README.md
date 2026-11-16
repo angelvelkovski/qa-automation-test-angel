@@ -109,6 +109,73 @@ src/config/env.ts the only place that reads process.env
 
 Pipeline practices that go with it: use separate **Environments** (e.g. staging, production) with their own secrets and required reviewers; give the workflow the least permissions it needs (`permissions: contents: read`); never print secrets or upload `.env` / `.auth/` as artifacts; do not expose secrets to pull requests from forks; rotate credentials on a schedule and immediately if one leaks; and add secret scanning (GitHub secret scanning or gitleaks) so a committed secret is caught early.
 
+> [!NOTE]
+> **Example CI workflow.** This repo does not ship a workflow file; this is how it would be wired up in GitHub Actions
+> (save as `.github/workflows/tests.yml`, and create the secrets and variables first under
+> Settings → Secrets and variables → Actions). `ui-problem` is an expected failure, so the job still ends green.
+> After a run, download the report artifacts from the run's summary page (Artifacts section).
+>
+> ```yaml
+> name: tests
+> on: [push, pull_request]
+>
+> permissions:
+>   contents: read          # least privilege: the job only needs to read the code
+>
+> jobs:
+>   test:
+>     runs-on: ubuntu-latest
+>     env:
+>       # Variables: not sensitive, may differ per environment
+>       UI_BASE_URL: ${{ vars.UI_BASE_URL }}
+>       API_BASE_URL: ${{ vars.API_BASE_URL }}
+>       TAX_RATE: ${{ vars.TAX_RATE }}
+>       API_PERSISTS_DATA: ${{ vars.API_PERSISTS_DATA }}
+>       # Secrets: masked in logs, never committed
+>       STANDARD_USER: ${{ secrets.STANDARD_USER }}
+>       STANDARD_PASSWORD: ${{ secrets.STANDARD_PASSWORD }}
+>       PROBLEM_USER: ${{ secrets.PROBLEM_USER }}
+>       PROBLEM_PASSWORD: ${{ secrets.PROBLEM_PASSWORD }}
+>     steps:
+>       - uses: actions/checkout@v4
+>       - uses: actions/setup-node@v4
+>         with: { node-version: 22, cache: npm }
+>       - uses: actions/setup-java@v4          # only needed to build the Allure report
+>         with: { distribution: temurin, java-version: 17 }
+>       - run: npm ci
+>       - run: npx playwright install --with-deps chromium
+>       - run: npm run test:all
+>       - run: npm run allure:generate
+>         if: always()                        # build the Allure report even when tests fail
+>
+>       # Artifacts: upload with `if: always()` so they exist exactly when something failed.
+>       # Only report output is uploaded, never .env or .auth/ (saved login sessions).
+>       - uses: actions/upload-artifact@v4
+>         if: always()
+>         with:
+>           name: allure-report                # open locally: npx allure open <downloaded folder>
+>           path: allure-report
+>           retention-days: 14
+>       - uses: actions/upload-artifact@v4
+>         if: always()
+>         with:
+>           name: allure-results               # raw data, lets you rebuild the report or keep Allure history
+>           path: allure-results
+>           retention-days: 14
+>       - uses: actions/upload-artifact@v4
+>         if: always()
+>         with:
+>           name: playwright-report            # open locally: npx playwright show-report <downloaded folder>
+>           path: playwright-report
+>           retention-days: 14
+>       - uses: actions/upload-artifact@v4
+>         if: failure()
+>         with:
+>           name: failure-traces-and-screenshots
+>           path: test-results                 # traces/screenshots are kept only for failed tests
+>           retention-days: 7
+> ```
+
 ## Parts 2 and 3
 
 - **Postman** (`/postman`): collection plus environment, with shared tests at collection level. See [postman/README.md](postman/README.md). Run: `npm run test:postman`.
